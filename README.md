@@ -1,6 +1,21 @@
 # Vehicle Management System (VMS)
 
-內部車輛管理系統。Monorepo（npm workspaces），前端 Vite + React + shadcn/ui，後端 Express + Prisma + Postgres。
+內部車輛管理系統。Monorepo（npm workspaces / pnpm workspaces 二選一），前端 Vite + React + shadcn/ui，後端 Express + Prisma + Postgres。
+
+---
+
+## 套件管理器
+
+本專案同時支援 **npm** 與 **pnpm**，擇一使用即可：
+
+| | npm | pnpm |
+|---|---|---|
+| 安裝指令 | `npm install` | `pnpm install` |
+| 啟動指令 | `npm run dev` | `npm run dev`（腳本內部仍呼叫 npm） |
+| lock 檔 | `package-lock.json` | `pnpm-lock.yaml` |
+| 本地套件宣告 | `"@vms/shared": "*"` | `"@vms/shared": "workspace:*"` |
+
+> **注意**：目前 `apps/api` 與 `apps/web` 的 `package.json` 使用 `"@vms/shared": "workspace:*"`（pnpm 必要語法），**npm install 不支援 `workspace:` 協議**，請改用 `pnpm install` 安裝依賴。若需恢復 npm 相容性，請將版本改回 `"*"`。
 
 ---
 
@@ -10,10 +25,30 @@
 cp .env.example .env          # 第一次先複製出來、按需修改
 cp .env.test.example .env.test # 測試專用：DATABASE_URL 指向獨立的 vms_test（見「測試資料庫」）
 docker compose up -d          # 啟 db (Postgres) + pgadmin (5050)
-npm install                   # 安裝所有 workspace 依賴
+pnpm install                  # 安裝所有 workspace 依賴（本 branch 使用 pnpm）
 npm run db:migrate            # 建立 schema
 npm run seed                  # 建立第一個 admin（讀 .env 的 SEED_ADMIN_*）
 npm run seed:mock             # 選用：塞 30 員工 + 50 車輛模擬資料，方便看 dashboard / 分頁
+```
+
+### pnpm 安裝說明
+
+本專案在 pnpm 安裝時需要以下設定（已配置好，無需手動調整）：
+
+| 檔案 | 用途 |
+|---|---|
+| `pnpm-workspace.yaml` | 宣告 workspace 範圍（`apps/*`, `packages/*`）並批准需要 build script 的套件 |
+| `.npmrc` | 說明文件：解釋為何 jest 放在 root devDependencies |
+
+**pnpm v11 預設安全機制**：含有 install script 的套件（Prisma、bcrypt、esbuild 等）需在 `pnpm-workspace.yaml` 的 `allowBuilds` 明確批准才會執行建置。
+
+**jest 置於 root devDependencies**：pnpm workspace 的子套件依賴不會出現在 root `node_modules/`。`apps/api` 的 test script 直接引用 `../../node_modules/jest/bin/jest.js`，因此 jest、ts-jest、@types/jest 移至 root，確保路徑可解析。
+
+**從 npm 切換到 pnpm（已有舊的 node_modules 時）**：pnpm 偵測到 `node_modules` 存在時會跳過安裝。請先清除再重裝：
+
+```bash
+rm -rf node_modules apps/api/node_modules apps/web/node_modules packages/shared/node_modules
+pnpm install
 ```
 
 ## 日常啟動

@@ -1,0 +1,12 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# pnpm v11 預設不執行套件安裝腳本（安全性考量）。
+# 以下套件需要建置腳本才能正常運作，明確批准。
+allowBuilds:
+  '@prisma/engines': true  # Prisma 本地查詢引擎
+  bcrypt: true             # native addon（密碼雜湊）
+  esbuild: true            # Vite 底層打包工具
+  prisma: true             # prisma CLI generate
+  unrs-resolver: true      # Vite 依賴的模組解析器
