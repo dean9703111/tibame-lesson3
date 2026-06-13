@@ -45,11 +45,13 @@ npm run db:studio      # prisma studio on :5555
 npm run seed           # re-create the admin
 ```
 
-Single test runs:
+Single test runs (these call jest directly, **skipping** the `db:test:deploy` step that `npm run test:api` does first — make sure the `vms_test` schema already exists, e.g. run `npm run test:api` once or `npm run db:test:deploy --workspace apps/api`):
 - API: `cd apps/api && node --experimental-vm-modules ../../node_modules/jest/bin/jest.js src/routes/auth.test.ts`
 - Web: `cd apps/web && npx vitest run src/pages/Login.test.tsx`
 
-API tests share **one Postgres instance** (the dev DB). `jest.config.js` forces `maxWorkers: 1`; `src/test/setup.ts` exposes `resetDb()` which truncates `vehicle` + `employee`. Don't try to parallelize API tests, and don't point them at a separate test DB unless you also rework setup.
+API tests run against a **dedicated test DB** (`vms_test`), not the dev DB (`vms`) — both live in the same `vms-db` Postgres container. The switch is automatic: jest sets `NODE_ENV=test`, so `loadDotenv.ts` layers `.env.test` (which overrides `DATABASE_URL` → `vms_test`) on top of `.env`. The `test` script runs `db:test:deploy` (`prisma migrate deploy` against `vms_test`) first, which auto-creates the DB on first run. `jest.config.js` forces `maxWorkers: 1` (all tests share the one `vms_test` instance); `src/test/setup.ts` exposes `resetDb()` which truncates `auditLog` + `vehicle` + `employee` in `beforeEach` so every test starts clean. Don't try to parallelize API tests. `.env.test` is gitignored — copy it from `.env.test.example`.
+
+pgAdmin observability: `vms_test` is auto-created on **fresh** Postgres volume init by `infra/postgres/init/01-create-test-db.sql` (existing volumes won't re-run it — `npm run test:api` creates it instead). `infra/pgadmin/servers.json` ships **two** server entries — `VMS local` (→ `vms`) and `VMS test (vms_test)` (→ `vms_test`) — with `pgpass` covering both. servers.json is only imported into a **fresh** pgAdmin config volume; after editing it, re-provision with `docker compose rm -sf pgadmin && docker volume rm vms_pgadmin && docker compose up -d pgadmin` (Postgres data untouched).
 
 ## Auth + CSRF (subtle)
 

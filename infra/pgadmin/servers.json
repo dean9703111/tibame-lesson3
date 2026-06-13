@@ -9,6 +9,16 @@
       "Username": "vms",
       "PassFile": "/tmp/pgpass",
       "SSLMode": "prefer"
+    },
+    "2": {
+      "Name": "VMS test (vms_test)",
+      "Group": "Servers",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "vms_test",
+      "Username": "vms",
+      "PassFile": "/tmp/pgpass",
+      "SSLMode": "prefer"
     }
   }
 }
