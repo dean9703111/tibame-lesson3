@@ -1,9 +1,9 @@
 import request from "supertest";
 import { buildApp } from "../app.js";
-import { prisma } from "../db/prisma.js";
 import { disconnect, resetDb } from "../test/setup.js";
 import { makeEmployee } from "../test/factories.js";
 import { loginAs } from "../test/helpers.js";
+import { prisma } from "../db/prisma.js";
 
 const app = buildApp();
 
@@ -15,6 +15,7 @@ afterAll(async () => {
   await disconnect();
 });
 
+// 登入(POST /api/auth/login)的案例已整併至 login.test.ts(對應 doc/test/backend/login.md)。
 describe("auth", () => {
   describe("成功登入", () => {
     test("正確帳密 → 200、回傳 user + csrfToken、不含 passwordHash、Set-Cookie 為 HttpOnly", async () => {
@@ -45,87 +46,10 @@ describe("auth", () => {
     });
   });
 
-  describe("登入失敗", () => {
-    test("密碼錯誤 → 401 INVALID_CREDENTIALS", async () => {
-      await makeEmployee({ username: "alice", password: "password123" });
-      const res = await request(app)
-        .post("/api/auth/login")
-        .send({ username: "alice", password: "wrong" });
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_CREDENTIALS");
-    });
-
-    test("帳號不存在 → 401 INVALID_CREDENTIALS（不洩漏帳號是否存在）", async () => {
-      const res = await request(app)
-        .post("/api/auth/login")
-        .send({ username: "ghost", password: "whatever" });
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_CREDENTIALS");
-    });
-
-    test("缺少必填欄位 → 400 VALIDATION_ERROR", async () => {
-      const res = await request(app)
-        .post("/api/auth/login")
-        .send({ username: "alice" });
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
-    });
-  });
-
-  describe("帳號鎖定", () => {
-    test("連續 5 次密碼錯誤 → 鎖定帳號（failedLoginCount=5、lockedUntil 在未來）", async () => {
-      const emp = await makeEmployee({ username: "alice", password: "password123" });
-      for (let i = 0; i < 5; i++) {
-        const res = await request(app)
-          .post("/api/auth/login")
-          .send({ username: "alice", password: "wrong" });
-        expect(res.status).toBe(401);
-        expect(res.body.error.code).toBe("INVALID_CREDENTIALS");
-      }
-      const after = await prisma.employee.findUnique({ where: { id: emp.id } });
-      expect(after?.failedLoginCount).toBe(5);
-      expect(after?.lockedUntil?.getTime()).toBeGreaterThan(Date.now());
-    });
-
-    test("鎖定後即使密碼正確 → 401 ACCOUNT_LOCKED 並回傳 unlockAt", async () => {
-      await makeEmployee({ username: "alice", password: "password123" });
-      for (let i = 0; i < 5; i++) {
-        await request(app)
-          .post("/api/auth/login")
-          .send({ username: "alice", password: "wrong" });
-      }
-      const res = await request(app)
-        .post("/api/auth/login")
-        .send({ username: "alice", password: "password123" });
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("ACCOUNT_LOCKED");
-      expect(res.body.error.details.unlockAt).toEqual(expect.any(String));
-    });
-
-    test("第 4 次失敗尚未鎖定", async () => {
-      const emp = await makeEmployee({ username: "alice", password: "password123" });
-      for (let i = 0; i < 4; i++) {
-        const res = await request(app)
-          .post("/api/auth/login")
-          .send({ username: "alice", password: "wrong" });
-        expect(res.status).toBe(401);
-        expect(res.body.error.code).toBe("INVALID_CREDENTIALS");
-      }
-      const after = await prisma.employee.findUnique({ where: { id: emp.id } });
-      expect(after?.failedLoginCount).toBe(4);
-      expect(after?.lockedUntil).toBeNull();
-    });
-  });
-
-  describe("帳號狀態", () => {
-    test("INACTIVE 帳號無法登入 → 401 ACCOUNT_INACTIVE", async () => {
-      await makeEmployee({ username: "alice", password: "password123", status: "INACTIVE" });
-      const res = await request(app)
-        .post("/api/auth/login")
-        .send({ username: "alice", password: "password123" });
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("ACCOUNT_INACTIVE");
-    });
+  test("GET /api/auth/me without cookie -> 401", async () => {
+    const res = await request(app).get("/api/auth/me");
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe("UNAUTHENTICATED");
   });
 
   describe("Session 驗證", () => {

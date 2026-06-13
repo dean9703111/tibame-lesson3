@@ -23,11 +23,7 @@
 3. 可以看到 `Employee`、`Vehicle`、`AuditLog` 三張表
 4. 對著 table 按右鍵 → **View/Edit Data → All Rows** 即可查資料
 
-> **看不到 vms_test？** `servers.json` 只在 pgAdmin **設定卷首次建立時**匯入。若你是在加入這條 server 之前就跑過 pgAdmin，需重置 pgAdmin 設定卷讓它重新匯入（不影響 Postgres 資料）：
-> ```bash
-> docker compose rm -sf pgadmin && docker volume rm vms_pgadmin && docker compose up -d pgadmin
-> ```
-> 另外，`vms_test` 由 Postgres 首次初始化時的 `infra/postgres/init/` 腳本自動建立；既有資料卷不會重跑該腳本，但只要跑過一次 `npm run test:api`（會 `prisma migrate deploy` 到 `vms_test`）即會存在。
+> 測試 DB `vms_test`（由 `npm test` 自動建立／重建）也在同一個 server 底下：展開 **Databases → vms_test** 即可觀察測試留下的資料。`pgpass` 的 DB 欄位是 `*`，連任一 DB 都免輸入密碼。
 
 ## 如果要手動建立 Server（萬一 servers.json 沒生效）
 

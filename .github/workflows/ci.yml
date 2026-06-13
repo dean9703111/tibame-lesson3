@@ -1,34 +1,27 @@
 name: CI
 
-# 每個 branch 的 push 都觸發
 on:
-  push:
+  push: # 所有分支的 push 都觸發
 
-# 同一 branch 連續推送時，取消尚未跑完的舊流程，節省 runner
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  HUSKY: 0 # CI 不需安裝 git hooks
-
 jobs:
-  # ── 第一關：Lint ──────────────────────────────
   lint:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run lint
 
-  # ── 第二關（平行）：後端測試 + 覆蓋率 ───────────
   test-api:
-    name: Test API
+    name: API tests (Jest)
     needs: lint
     runs-on: ubuntu-latest
     services:
@@ -42,49 +35,53 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U vms"
-          --health-interval 10s
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
+    env:
+      # prisma.config.ts 載入時即解析 DATABASE_URL（無 .env 可讀），CI 一律指向測試 DB
+      DATABASE_URL: postgresql://vms:vms@localhost:5432/vms_test?schema=public
+      TEST_DATABASE_URL: postgresql://vms:vms@localhost:5432/vms_test?schema=public
+      JWT_SECRET: ci-only-jwt-secret-not-for-production-use
+      COOKIE_SECRET: ci-only-cookie-secret-not-for-production
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
-      # 測試需要 repo 根的 .env（密鑰等）與 .env.test（覆寫 DATABASE_URL → vms_test）
-      - name: Prepare env files
-        run: |
-          cp .env.example .env
-          cp .env.test.example .env.test
       - name: Generate Prisma client
-        run: npm run db:generate --workspace apps/api
+        run: npx prisma generate
+        working-directory: apps/api
+      # pretest 會自動重建 vms_test schema（setup-test-db.mjs）
       - name: Run API tests with coverage
-        run: npm run test:coverage --workspace apps/api
+        run: npm run test --workspace apps/api -- --coverage
       - name: Upload API coverage report
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
-          name: coverage-api
+          name: api-coverage
           path: apps/api/coverage
+          if-no-files-found: warn
 
-  # ── 第二關（平行）：前端測試 + 覆蓋率 ───────────
   test-web:
-    name: Test Web
+    name: Web tests (Vitest)
     needs: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
-      - name: Run Web tests with coverage
-        run: npm run test:coverage --workspace apps/web
-      - name: Upload Web coverage report
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+      - name: Run web tests with coverage
+        run: npm run test --workspace apps/web -- --coverage
+      - name: Upload web coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
-          name: coverage-web
+          name: web-coverage
           path: apps/web/coverage
+          if-no-files-found: warn

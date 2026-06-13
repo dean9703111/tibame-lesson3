@@ -36,3 +36,6 @@ apps/web/.vite/
 
 # PR 描述草稿（git-pr-description skill 產物）
 pr-review.md
+
+# Prisma 7 generated client（由 prisma generate 重建）
+apps/api/src/generated/

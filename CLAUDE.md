@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Vehicle Management System (VMS), a Traditional-Chinese internal app. npm workspaces monorepo, Node ≥ 20, ESM throughout.
 
-- `apps/api` — Express 4 + Prisma 6 + Postgres 16. `@vms/api`.
-- `apps/web` — Vite + React 18 + shadcn/ui + TanStack Query/Table + Zustand + React Router 7. `@vms/web`.
+- `apps/api` — Express 5 + Prisma 7 + Postgres 16. `@vms/api`. Prisma client 由 `prisma generate` 產生到 `src/generated/prisma/`（gitignored；`db:migrate` 會順帶 generate，fresh clone 後需先跑一次才能過型別檢查）。datasource URL 在 `prisma.config.ts`（自行載入根目錄 `.env`），不在 schema.prisma。
+- `apps/web` — Vite + React 19 + Tailwind 4（CSS-first 設定在 `src/index.css`，無 tailwind.config.js）+ shadcn/ui + TanStack Query/Table + Zustand + React Router 7. `@vms/web`.
 - `packages/shared` — `@vms/shared`. Zod schemas, shared types, `ApiError` taxonomy. Both ends import from here; do not duplicate schemas.
 - `infra/pgadmin` — pgAdmin auto-provisioning (`servers.json` + `pgpass` mounted read-only).
 - `openspec/` — change proposals, design, specs, and tasks. The archived `add-vehicle-management-system` change is the source of truth for current behavior. New work follows the OpenSpec workflow (`.cursor/skills/` and the `opsx:*` / `openspec-*` skills).
@@ -41,6 +41,7 @@ npm test               # root jest, then per-workspace tests
 npm run test:root      # root-only jest (ignores apps/ and packages/)
 npm run db:migrate     # apps/api: prisma migrate dev
 npm run db:reset       # prisma migrate reset --force (Prisma still prompts)
+npm run db:test:reset  # rebuild the test DB (drop schema + migrate deploy on vms_test)
 npm run db:studio      # prisma studio on :5555
 npm run seed           # re-create the admin
 ```
@@ -49,9 +50,12 @@ Single test runs (these call jest directly, **skipping** the `db:test:deploy` st
 - API: `cd apps/api && node --experimental-vm-modules ../../node_modules/jest/bin/jest.js src/routes/auth.test.ts`
 - Web: `cd apps/web && npx vitest run src/pages/Login.test.tsx`
 
-API tests run against a **dedicated test DB** (`vms_test`), not the dev DB (`vms`) — both live in the same `vms-db` Postgres container. The switch is automatic: jest sets `NODE_ENV=test`, so `loadDotenv.ts` layers `.env.test` (which overrides `DATABASE_URL` → `vms_test`) on top of `.env`. The `test` script runs `db:test:deploy` (`prisma migrate deploy` against `vms_test`) first, which auto-creates the DB on first run. `jest.config.js` forces `maxWorkers: 1` (all tests share the one `vms_test` instance); `src/test/setup.ts` exposes `resetDb()` which truncates `auditLog` + `vehicle` + `employee` in `beforeEach` so every test starts clean. Don't try to parallelize API tests. `.env.test` is gitignored — copy it from `.env.test.example`.
+API tests run against a **dedicated test DB** — `TEST_DATABASE_URL` in `.env` (default `vms_test`, same Postgres container as the dev `vms`). How it works:
 
-pgAdmin observability: `vms_test` is auto-created on **fresh** Postgres volume init by `infra/postgres/init/01-create-test-db.sql` (existing volumes won't re-run it — `npm run test:api` creates it instead). `infra/pgadmin/servers.json` ships **two** server entries — `VMS local` (→ `vms`) and `VMS test (vms_test)` (→ `vms_test`) — with `pgpass` covering both. servers.json is only imported into a **fresh** pgAdmin config volume; after editing it, re-provision with `docker compose rm -sf pgadmin && docker volume rm vms_pgadmin && docker compose up -d pgadmin` (Postgres data untouched).
+- `pretest` (`apps/api/scripts/setup-test-db.mjs`) drops the `public` schema and re-applies all migrations via `prisma migrate deploy`, so every `npm test` starts from a clean schema. It deliberately avoids `prisma migrate reset` (interactive + blocked for AI agents).
+- Jest `setupFiles` (`src/test/jest.env.ts`) overrides `DATABASE_URL` with `TEST_DATABASE_URL` before any module loads, so even direct single-file jest runs hit the test DB. Direct runs skip `pretest` — if `vms_test` doesn't exist yet, run `npm run db:test:reset` once.
+- Guard: both scripts refuse to run unless the test DB name contains `test`, so the dev DB can't be wiped by misconfiguration.
+- `jest.config.js` still forces `maxWorkers: 1` (one shared test DB) and `src/test/setup.ts` `resetDb()` truncates between tests — don't parallelize API tests. Because `resetDb()` runs in `beforeEach`, the last test's rows stay in `vms_test` and are inspectable in pgAdmin.
 
 ## Auth + CSRF (subtle)
 
@@ -65,7 +69,7 @@ The API uses a JWT stored in an httpOnly `vms_token` cookie. The CSRF token is *
 
 All errors flow through `apps/api/src/middleware/error.ts`:
 - `HttpError(status, code, message, details?)` → JSON `{ error: { code, message, details } }` with that status.
-- `ZodError` → 400 `VALIDATION_ERROR` with `err.flatten()` in `details`.
+- `ZodError` → 400 `VALIDATION_ERROR` with `z.flattenError(err)` in `details`.
 - Everything else → 500 `INTERNAL_ERROR` (and `console.error` for the server log).
 
 The full code taxonomy lives in `packages/shared/src/errors.ts`. **Add new codes there**, not inline, so both ends stay in sync. The web `apiClient` interceptor unwraps server errors into a typed `ApiError` (`apps/web/src/lib/api.ts`).

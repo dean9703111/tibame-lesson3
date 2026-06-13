@@ -120,16 +120,26 @@ openspec/  本專案的需求／設計／規格／任務（OpenSpec）
 npm run dev          # 同時起 api + web（concurrently，--kill-others-on-fail）
 npm run dev:api      # 只起 api（Express / tsx watch）
 npm run dev:web      # 只起 web（Vite）
-npm test             # 跑兩個 app 的測試（api: 打 vms_test、web: vitest）
-npm run test:api     # 只跑 api 測試（jest，需 docker DB 在跑；自動用 vms_test）
+npm test             # 跑兩個 app 的測試（api: jest、web: vitest）
+npm run test:api     # 只跑 api 測試（jest，需 docker DB 在跑；自動重建測試 DB）
 npm run test:web     # 只跑 web 測試（vitest）
 npm run lint         # ESLint（整個 repo）
-npm run db:migrate   # prisma migrate dev（dev DB vms）
-npm run db:reset     # prisma migrate reset --force（dev DB vms，不會互動詢問）
+npm run db:migrate   # prisma migrate dev
+npm run db:reset     # prisma migrate reset --force（直接重置，不會互動詢問）
+npm run db:test:reset # 手動重建測試 DB（vms_test：清空 schema + 重套 migrations）
 npm run db:studio    # 開 prisma studio (5555)
 npm run seed         # 重新建立 seed admin
 npm run seed:mock    # 開發用：保留 ADMIN、清空其他資料，塞 30 員工 + 50 車輛
 ```
+
+## 測試與測試 DB
+
+API 測試跑在**專屬測試 DB**（`.env` 的 `TEST_DATABASE_URL`，預設同一個 Postgres container 裡的 `vms_test`），不會碰開發用的 `vms`：
+
+- `npm test` / `npm run test:api` 會先自動重建測試 DB（清空 schema + 重套全部 migrations），確保每次都是乾淨環境。
+- 測試結束後，最後一個測試留下的資料會保留在 `vms_test`，可直接在 pgAdmin（http://localhost:5050 → VMS local → Databases → `vms_test`）觀察。
+- 直接用 jest 跑單一測試檔不會觸發重建，但仍然連到 `vms_test`；若該 DB 還不存在，先跑一次 `npm run db:test:reset`。
+- 防呆：`TEST_DATABASE_URL` 的資料庫名稱必須包含 `test`，否則測試會直接報錯，避免誤砍開發資料。
 
 ## 規格與設計
 
