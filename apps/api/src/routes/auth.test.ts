@@ -3,6 +3,7 @@ import { buildApp } from "../app.js";
 import { disconnect, resetDb } from "../test/setup.js";
 import { makeEmployee } from "../test/factories.js";
 import { loginAs } from "../test/helpers.js";
+import { prisma } from "../db/prisma.js";
 
 const app = buildApp();
 
