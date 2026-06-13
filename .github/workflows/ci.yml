@@ -1,0 +1,90 @@
+name: CI
+
+# 每個 branch 的 push 都觸發
+on:
+  push:
+
+# 同一 branch 連續推送時，取消尚未跑完的舊流程，節省 runner
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HUSKY: 0 # CI 不需安裝 git hooks
+
+jobs:
+  # ── 第一關：Lint ──────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  # ── 第二關（平行）：後端測試 + 覆蓋率 ───────────
+  test-api:
+    name: Test API
+    needs: lint
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vms
+          POSTGRES_PASSWORD: vms
+          POSTGRES_DB: vms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vms"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # 測試需要 repo 根的 .env（密鑰等）與 .env.test（覆寫 DATABASE_URL → vms_test）
+      - name: Prepare env files
+        run: |
+          cp .env.example .env
+          cp .env.test.example .env.test
+      - name: Generate Prisma client
+        run: npm run db:generate --workspace apps/api
+      - name: Run API tests with coverage
+        run: npm run test:coverage --workspace apps/api
+      - name: Upload API coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-api
+          path: apps/api/coverage
+
+  # ── 第二關（平行）：前端測試 + 覆蓋率 ───────────
+  test-web:
+    name: Test Web
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Run Web tests with coverage
+        run: npm run test:coverage --workspace apps/web
+      - name: Upload Web coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-web
+          path: apps/web/coverage
