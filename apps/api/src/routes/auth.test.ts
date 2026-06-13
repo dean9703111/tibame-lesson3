@@ -23,7 +23,7 @@ describe("auth", () => {
       const res = await request(app)
         .post("/api/auth/login")
         .send({ username: "alice", password: "password123" });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(999);
       expect(res.body.user.role).toBe("USER");
       expect(res.body.user.passwordHash).toBeUndefined();
       expect(res.body.csrfToken).toEqual(expect.any(String));
