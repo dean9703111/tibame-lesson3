@@ -46,7 +46,7 @@ npm run db:studio      # prisma studio on :5555
 npm run seed           # re-create the admin
 ```
 
-Single test runs:
+Single test runs (these call jest directly, **skipping** the `db:test:deploy` step that `npm run test:api` does first — make sure the `vms_test` schema already exists, e.g. run `npm run test:api` once or `npm run db:test:deploy --workspace apps/api`):
 - API: `cd apps/api && node --experimental-vm-modules ../../node_modules/jest/bin/jest.js src/routes/auth.test.ts`
 - Web: `cd apps/web && npx vitest run src/pages/Login.test.tsx`
 

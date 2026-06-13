@@ -11,11 +11,16 @@
 
 ## 連到 Postgres
 
-**不需要手動 add server**。pgAdmin 啟動時已自動從 `servers.json` 載入一條連線，並透過 `pgpass` 預載密碼。登入後直接：
+**不需要手動 add server**。pgAdmin 啟動時已自動從 `servers.json` 載入**兩條**連線，並透過 `pgpass` 預載密碼：
 
-1. 左側 server tree 展開 **Servers → VMS local**
-2. 展開 **Databases → vms → Schemas → public → Tables**
-3. 可以看到 `Employee` 與 `Vehicle` 兩張表
+- **VMS local** → maintenance DB `vms`（日常開發資料）
+- **VMS test (vms_test)** → maintenance DB `vms_test`（API 測試專用，見根 README「測試資料庫」）
+
+登入後直接：
+
+1. 左側 server tree 展開 **Servers → VMS local**（或 **VMS test (vms_test)**）
+2. 展開 **Databases → vms（或 vms_test）→ Schemas → public → Tables**
+3. 可以看到 `Employee`、`Vehicle`、`AuditLog` 三張表
 4. 對著 table 按右鍵 → **View/Edit Data → All Rows** 即可查資料
 
 > 測試 DB `vms_test`（由 `npm test` 自動建立／重建）也在同一個 server 底下：展開 **Databases → vms_test** 即可觀察測試留下的資料。`pgpass` 的 DB 欄位是 `*`，連任一 DB 都免輸入密碼。

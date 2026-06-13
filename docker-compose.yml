@@ -13,6 +13,8 @@ services:
       - "5432:5432"
     volumes:
       - vms_pgdata:/var/lib/postgresql/data
+      # 首次初始化時自動建立測試資料庫 vms_test（只在 data 卷為空時執行）
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U vms -d vms"]
       interval: 5s

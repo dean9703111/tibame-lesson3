@@ -6,6 +6,7 @@ build/
 coverage/
 .env
 .env.local
+.env.test
 *.log
 
 # 統一由 .agents 管理，個人的設定不上傳
